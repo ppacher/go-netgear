@@ -25,7 +25,7 @@ package netgear
 
 import (
     "fmt"
-    "net"
+    "regexp"
     "net/http"
     "io/ioutil"
     "bytes"
@@ -65,12 +65,12 @@ const SOAP_ATTACHED_DEVICES = `\
 `
 
 type AttachedDevice struct {
-    Signal int `json:"signal"`
-    IP net.IP `json:"ip"`
+    Signal string `json:"signal"`
+    IP string `json:"ip"`
     Name string `json:"name"`
     Mac string `json:"mac"`
     Type string `json:"type"`
-    LinkRate int `json:"link_rate"`
+    LinkRate string `json:"link_rate"`
 }
 
 type Netgear struct {
@@ -78,6 +78,7 @@ type Netgear struct {
     username string
     password string
     loggedIn bool
+    regex *regexp.Regexp
 }
 
 func (netgear *Netgear) IsLoggedIn() bool {
@@ -97,10 +98,14 @@ func (netgear *Netgear) Login() (bool, error) {
     return netgear.loggedIn, err
 }
 
+func (netgear *Netgear) getUrl() string {
+    return fmt.Sprintf("http://%s:5000/soap/server_sa/", netgear.host)
+}
+
 func (netgear *Netgear) makeRequest(action string, message string) (string, error) {
     client := &http.Client{}
 
-    url := fmt.Sprintf("http://%s:5000/soap/server_sa/", netgear.host)
+    url := netgear.getUrl()
 
     req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(message)))
     if err != nil {
@@ -121,11 +126,46 @@ func (netgear *Netgear) makeRequest(action string, message string) (string, erro
     return string(body), err
 }
 
+
+func (netgear *Netgear) GetAttachedDevices() ([]AttachedDevice, error) {
+    var result []AttachedDevice
+
+    message := fmt.Sprintf(SOAP_ATTACHED_DEVICES, SESSION_ID)
+    resp, err := netgear.makeRequest(SOAP_ATTACHED_DEVICES_ACTION, message)
+
+    if strings.Contains(resp, "<ResponseCode>000</ResponseCode>") {
+        re := netgear.regex.FindStringSubmatch(resp)
+        if len(re) < 2 {
+            err = fmt.Errorf("Invalid response code")
+            return result, err
+        }
+        devices := re[1]
+        fields := strings.Split(devices, ";")
+
+        countItems := int((len(fields)-1)/6)
+
+        for i := 0; i < countItems ; i++ {
+            device := AttachedDevice{
+                Signal: fields[i*6+0],
+                IP: fields[i*6+1],
+                Name: fields[i*6+1],
+                Mac: fields[i*6+2],
+                Type: fields[i*6+3],
+                LinkRate: fields[i*6+4],
+            }
+            result = append(result, device)
+        }
+
+    }
+    return result, err
+}
+
 func NewRouter(host, username, password string) *Netgear {
     router := &Netgear{
         host: host,
         username: username,
         password: password,
+        regex : regexp.MustCompile("<NewAttachDevice>(.*)</NewAttachDevice>"),
     }
     return router
 }
