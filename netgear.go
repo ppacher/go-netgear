@@ -148,10 +148,10 @@ func (netgear *Netgear) GetAttachedDevices() ([]AttachedDevice, error) {
             device := AttachedDevice{
                 Signal: fields[i*6+0],
                 IP: fields[i*6+1],
-                Name: fields[i*6+1],
-                Mac: fields[i*6+2],
-                Type: fields[i*6+3],
-                LinkRate: fields[i*6+4],
+                Name: fields[i*6+2],
+                Mac: fields[i*6+3],
+                Type: fields[i*6+4],
+                LinkRate: fields[i*6+5],
             }
             result = append(result, device)
         }
