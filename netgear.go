@@ -121,3 +121,12 @@ func (netgear *Netgear) makeRequest(action string, message string) (string, erro
     return string(body), err
 }
 
+func NewRouter(host, username, password string) *Netgear {
+    router := &Netgear{
+        host: host,
+        username: username,
+        password: password,
+    }
+    return router
+}
+
