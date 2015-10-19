@@ -1,4 +1,4 @@
-// go-netgear: Get attached devices from your Netgear router
+// go-netgear: Go API to retrieve devices attached to modern Netgear routers
 //
 // This is a golang rewrite of the python module pynetgear developed by balloob:
 // <https.//github.com/balloob/pynetgear>
@@ -32,10 +32,10 @@ import (
     "strings"
 )
 
-const SESSION_ID = "A7D88AE69687E58D9A00"
+const sessionID = "A7D88AE69687E58D9A00"
 
-const SOAP_LOGIN_ACTION = "urn:NETGEAR-ROUTER:service:ParentalControl:1#Authenticate"
-const SOAP_LOGIN = `\
+const soapActionLogin = "urn:NETGEAR-ROUTER:service:ParentalControl:1#Authenticate"
+const soapLoginMessage = `\
 <?xml version="1.0" encoding="utf-8" ?>
 <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
 <SOAP-ENV:Header>
@@ -50,8 +50,8 @@ const SOAP_LOGIN = `\
 </SOAP-ENV:Envelope>
 `
 
-const SOAP_ATTACHED_DEVICES_ACTION = "urn:NETGEAR-ROUTER:service:DeviceInfo:1#GetAttachDevice"
-const SOAP_ATTACHED_DEVICES = `\
+const soapActionGetAttachedDevices = "urn:NETGEAR-ROUTER:service:DeviceInfo:1#GetAttachDevice"
+const soapGetAttachedDevicesMesssage = `\
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <SOAP-ENV:Envelope xmlns:SOAPSDK1="http://www.w3.org/2001/XMLSchema" xmlns:SOAPSDK2="http://www.w3.org/2001/XMLSchema-instance" xmlns:SOAPSDK3="http://schemas.xmlsoap.org/soap/encoding/" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
 <SOAP-ENV:Header>
@@ -64,6 +64,8 @@ const SOAP_ATTACHED_DEVICES = `\
 </SOAP-ENV:Envelope>
 `
 
+// AttachedDevice represents a network device attached to the Netgear router via 
+// a wired or wireless link
 type AttachedDevice struct {
     Signal string `json:"signal"`
     IP string `json:"ip"`
@@ -73,6 +75,8 @@ type AttachedDevice struct {
     LinkRate string `json:"link_rate"`
 }
 
+// Netgear describes a modern Netgear router providing a SOAP interface at port
+// 5000
 type Netgear struct {
     host string
     username string
@@ -81,14 +85,19 @@ type Netgear struct {
     regex *regexp.Regexp
 }
 
+// IsLoggedIn returns true if the session has been authenticated against the 
+// Netgear Router or false otherwise.
 func (netgear *Netgear) IsLoggedIn() bool {
     return netgear.loggedIn
 }
 
+// Login authenticates the session against the Netgear router
+// On success true and nil should be returned. Otherwise false and
+// the related error are returned
 func (netgear *Netgear) Login() (bool, error) {
-    message := fmt.Sprintf(SOAP_LOGIN, SESSION_ID, netgear.username, netgear.password)
+    message := fmt.Sprintf(soapLoginMessage, sessionID, netgear.username, netgear.password)
 
-    resp, err := netgear.makeRequest(SOAP_LOGIN_ACTION, message)
+    resp, err := netgear.makeRequest(soapActionLogin, message)
 
     if strings.Contains(resp, "<ResponseCode>000</ResponseCode>") {
         netgear.loggedIn = true
@@ -127,11 +136,14 @@ func (netgear *Netgear) makeRequest(action string, message string) (string, erro
 }
 
 
+// GetAttachedDevices queries the Netgear router for attached network
+// devices and returns a list of them. If an error occures an empty list
+// and the respective error is returned.
 func (netgear *Netgear) GetAttachedDevices() ([]AttachedDevice, error) {
     var result []AttachedDevice
 
-    message := fmt.Sprintf(SOAP_ATTACHED_DEVICES, SESSION_ID)
-    resp, err := netgear.makeRequest(SOAP_ATTACHED_DEVICES_ACTION, message)
+    message := fmt.Sprintf(soapGetAttachedDevicesMesssage, sessionID)
+    resp, err := netgear.makeRequest(soapActionGetAttachedDevices, message)
 
     if strings.Contains(resp, "<ResponseCode>000</ResponseCode>") {
         re := netgear.regex.FindStringSubmatch(resp)
@@ -160,6 +172,9 @@ func (netgear *Netgear) GetAttachedDevices() ([]AttachedDevice, error) {
     return result, err
 }
 
+// NewRouter returns a new and already initialized Netgear router instance
+// However, the Netgear SOAP session has not been authenticated at this point.
+// Use Login() to authenticate against the router
 func NewRouter(host, username, password string) *Netgear {
     router := &Netgear{
         host: host,
